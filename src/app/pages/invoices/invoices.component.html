@@ -1,0 +1,477 @@
+<div class="container-fluid">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Gestión de Facturas</h1>
+    <button class="btn btn-primary" (click)="openModal()">
+      <i class="bi bi-plus"></i> Nueva Factura
+    </button>
+  </div>
+
+  <div *ngIf="message" class="alert" [class]="'alert-' + messageType" role="alert">
+    {{ message }}
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <input 
+        type="text" 
+        class="form-control" 
+        placeholder="Buscar factura (ID, cliente, transacción...)"
+        (keyup)="onSearchChange($event.target.value)"
+      />
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <div *ngIf="loading" class="text-center p-5">
+        <div class="spinner-border" role="status">
+          <span class="visually-hidden">Cargando...</span>
+        </div>
+      </div>
+
+      <table *ngIf="!loading" class="table table-hover">
+        <thead class="table-dark">
+          <tr>
+            <th>ID</th>
+            <th>Cliente</th>
+            <th>Fecha</th>
+            <th>Subtotal</th>
+            <th>Impuestos</th>
+            <th>Total</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let invoice of filteredInvoices">
+            <td>{{ invoice.id }}</td>
+            <td>{{ getClientName(invoice.clientId) }}</td>
+            <td>{{ (invoice.issueDate || invoice.invoiceDate) | date: 'dd/MM/yyyy' }}</td>
+            <td>${{ invoice.subtotalSnapshot?.toFixed(2) || '0.00' }}</td>
+            <td>${{ invoice.taxTotalSnapshot?.toFixed(2) || '0.00' }}</td>
+            <td><strong>${{ invoice.totalSnapshot?.toFixed(2) || '0.00' }}</strong></td>
+            <td>
+              <button class="btn btn-sm btn-info" (click)="viewInvoice(invoice)" title="Ver">
+                <i class="bi bi-eye"></i>
+              </button>
+              <button class="btn btn-sm btn-success" (click)="printInvoice(invoice)" title="Imprimir">
+                <i class="bi bi-printer"></i>
+              </button>
+            </td>
+          </tr>
+          <tr *ngIf="filteredInvoices.length === 0">
+            <td colspan="7" class="text-center text-muted">
+              {{ searchTerm ? 'Sin resultados' : 'No hay facturas registradas' }}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+<!-- MODAL VER FACTURA (MEJORADO) -->
+<div class="modal invoice-modal-scroll" [class.show]="isViewMode && isModalOpen" [style.display]="isViewMode && isModalOpen ? 'block' : 'none'">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content" *ngIf="selectedInvoice">
+      <style>
+        .invoice-preview {
+          font-family: 'Arial', sans-serif;
+          color: #333;
+        }
+        
+        .invoice-preview .header {
+          text-align: center;
+          margin-bottom: 25px;
+          border-bottom: 3px solid #050505;
+          padding-bottom: 15px;
+        }
+        
+        .invoice-preview .header h1 {
+          font-size: 32px;
+          margin: 0 0 8px 0;
+          color: #2c3e50;
+        }
+        
+        .invoice-preview .header p {
+          margin: 3px 0;
+          font-size: 13px;
+          color: #666;
+        }
+        
+        .invoice-preview .invoice-info {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 15px;
+          margin-bottom: 20px;
+          padding: 15px;
+          background-color: #f8f9fa;
+          border-radius: 5px;
+        }
+        
+        .invoice-preview .invoice-info-item label {
+          font-weight: bold;
+          color: #000000;
+          margin-bottom: 3px;
+          display: block;
+          font-size: 13px;
+        }
+        
+        .invoice-preview .invoice-info-item value {
+          color: #555;
+          font-size: 14px;
+        }
+        
+        .invoice-preview table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 20px;
+        }
+        
+        .invoice-preview table thead {
+          background-color: #070707;
+          color: white;
+        }
+        
+        .invoice-preview table th {
+          padding: 12px 8px;
+          text-align: left;
+          font-weight: 600;
+          font-size: 12px;
+          border: 1px solid #2c3e50;
+        }
+        
+        .invoice-preview table td {
+          padding: 10px 8px;
+          border: 1px solid #dee2e6;
+          font-size: 13px;
+        }
+        
+        .invoice-preview table tbody tr:hover {
+          background-color: #f8f9fa;
+        }
+        
+        .invoice-preview .total-section {
+          display: flex;
+          justify-content: flex-end;
+          margin-top: 20px;
+        }
+        
+        .invoice-preview .total-box {
+          width: 300px;
+          background-color: #f8f9fa;
+          border: 2px solid #090909;
+          border-radius: 5px;
+          padding: 15px;
+        }
+        
+        .invoice-preview .total-row {
+          display: flex;
+          justify-content: space-between;
+          padding: 8px 0;
+          border-bottom: 1px solid #dee2e6;
+          font-size: 13px;
+        }
+        
+        .invoice-preview .total-row.grand {
+          font-size: 16px;
+          font-weight: bold;
+          color: #080808;
+          border: none;
+          padding: 12px 0;
+          background-color: white;
+          margin-top: 8px;
+        }
+
+              .invoice-modal-scroll .modal-content {
+          height: 90vh;
+          display: flex;
+          flex-direction: column;
+        }
+
+        .invoice-modal-scroll .modal-body {
+          overflow-y: auto;
+          flex: 1;
+        }
+      </style>
+
+      <div class="modal-header" style="background-color: #080808; color: white;">
+        <h5 class="modal-title" style="color: white;">Factura #{{ selectedInvoice?.id }}</h5>
+        <button type="button" class="btn-close btn-close-white" (click)="closeModal()"></button>
+      </div>
+
+      <div class="modal-body invoice-preview">
+        <div class="header">
+          <h1>FACTURA</h1>
+          <p>Número: <strong>#{{ selectedInvoice?.id }}</strong></p>
+        </div>
+
+        <div class="invoice-info">
+          <div class="invoice-info-item">
+            <label>Cliente:</label>
+            <span>{{ getClientName(selectedInvoice.clientId) }}</span>
+          </div>
+          <div class="invoice-info-item">
+            <label>Fecha de Emisión:</label>
+            <span>{{ (selectedInvoice.issueDate || selectedInvoice.invoiceDate) | date: 'dd/MM/yyyy' }}</span>
+          </div>
+        </div>
+
+        <h6 style="color: #2c3e50; font-weight: bold; margin: 15px 0 10px 0;">Productos</h6>
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 40%; text-align: left;">Producto</th>
+              <th style="width: 15%; text-align: center;">Cantidad</th>
+              <th style="width: 20%; text-align: right;">Precio Unit.</th>
+              <th style="width: 25%; text-align: right;">Impuestos</th>
+              <th style="width: 25%; text-align: right;">Subtotal</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let item of selectedInvoice.items">
+              <td style="text-align: left;">{{ getProductName(item.productId) }}</td>
+              <td style="text-align: center;">{{ item.quantity }}</td>
+              <td style="text-align: right;">${{ item.unitPriceSnapshot?.toFixed(2) || '0.00' }}</td>
+              <td style="text-align: left;">
+                <small *ngIf="(item.detailTaxes || []).length > 0">
+                  <span *ngFor="let tax of item.detailTaxes; let last = last">
+                    {{ getTaxName(tax.taxId) }} ({{ tax.rateSnapshot }}%)
+                    <br *ngIf="!last" />
+                  </span>
+                </small>
+                <small *ngIf="(item.detailTaxes || []).length === 0" class="text-muted">Sin impuesto</small>
+              </td>
+              <td style="text-align: right;">${{ (item.quantity * (item.unitPriceSnapshot || 0)).toFixed(2) }}</td>
+            </tr>
+            <tr *ngIf="selectedInvoice.items.length === 0">
+              <td colspan="5" class="text-center text-muted">No hay productos</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="total-section">
+          <div class="total-box">
+            <div class="total-row">
+              <label style="font-weight: 600;">Subtotal:</label>
+              <span>${{ selectedInvoice.subtotalSnapshot?.toFixed(2) }}</span>
+            </div>
+            <div class="total-row">
+              <label style="font-weight: 600;">Impuestos:</label>
+              <span>${{ selectedInvoice.taxTotalSnapshot?.toFixed(2) }}</span>
+            </div>
+            <div class="total-row grand">
+              <label>TOTAL:</label>
+              <span>${{ selectedInvoice.totalSnapshot?.toFixed(2) }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="background-color: #f8f9fa; border-top: 2px solid #dee2e6;">
+        <button type="button" class="btn btn-secondary" (click)="closeModal()">Cerrar</button>
+        <button type="button" class="btn btn-success" (click)="printFromPreview()">
+          <i class="bi bi-printer"></i> Imprimir / Descargar PDF
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CREAR FACTURA -->
+<div class="modal" [class.show]="!isViewMode && isModalOpen" [style.display]="!isViewMode && isModalOpen ? 'block' : 'none'">
+  <div class="modal-dialog modal-xl ">
+    <div class="modal-content">
+      
+      <!-- HEADER (FIJO POR DEFECTO) -->
+      <div class="modal-header">
+        <h5 class="modal-title">Nueva Factura</h5>
+        <button type="button" class="btn-close" (click)="closeModal()"></button>
+      </div>
+
+      <div class="modal-body">
+
+        <!-- 🔒 SECCIÓN FIJA -->
+        <div class="sticky-top-section">
+
+          <div *ngIf="errors['clientId']" class="alert alert-danger">
+            {{ errors['clientId'] }}
+          </div>
+          <div *ngIf="errors['items']" class="alert alert-danger">
+            {{ errors['items'] }}
+          </div>
+
+          <div class="row mb-4">
+            <div class="col-md-6">
+              <label class="form-label">Cliente <span class="text-danger">*</span></label>
+              <select class="form-select" [class.is-invalid]="errors['clientId']" [(ngModel)]="formData.clientId">
+                <option value="0">Selecciona un cliente</option>
+                <option *ngFor="let client of clients" [value]="client.id">
+                  {{ client.firstName }} {{ client.lastName }}
+                </option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Fecha</label>
+              <input type="text" class="form-control" [value]="formData.invoiceDate | date: 'dd/MM/yyyy'" readonly />
+              <small class="text-muted">Fecha automática del sistema</small>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- 🔽 CONTENIDO SCROLLABLE -->
+        <div class="scroll-content">
+
+          <div class="row products-row">
+
+  <!-- IZQUIERDA -->
+<div class="col-md-5 left-column">
+    <!-- 🔒 Buscador FIJO -->
+    <div class="left-fixed">
+      <h6 class="mb-3">Productos Disponibles <span class="text-danger">*</span></h6>
+      
+      <div class="mb-3">
+        <input 
+          type="text" 
+          class="form-control" 
+          placeholder="Buscar producto..."
+          (keyup)="onProductSearchChange($event.target.value)"
+          [value]="productSearchTerm"
+        />
+        <small class="text-muted">Se muestran {{ filteredProducts.length }} producto(s)</small>
+      </div>
+    </div>
+
+    <!-- 🔽 SOLO LISTA SCROLL -->
+    <div class="left-scroll">
+      <div *ngFor="let product of filteredProducts" 
+        class="list-group-item list-group-item-action p-3 border-bottom cursor-pointer"
+        (click)="addItemWithProduct(product)"
+        style="cursor: pointer; transition: background-color 0.2s;">
+        
+        <div>
+          <h6 class="mb-1">{{ product.name }}</h6>
+          <small class="text-muted">{{ product.description }}</small>
+          <div class="mt-2">
+            <span class="badge bg-primary">${{ product.price.toFixed(2) }}</span>
+            <span class="badge" [class]="product.stock > 0 ? 'bg-success' : 'bg-danger'">
+              Stock: {{ product.stock }}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div *ngIf="filteredProducts.length === 0" class="p-4 text-center text-muted">
+        No hay productos que coincidan
+      </div>
+    </div>
+
+  </div>
+
+  <!-- DERECHA -->
+  <div class="col-md-7 right-column">
+    <h6 class="mb-3">Productos en Factura <span class="text-danger">*</span></h6>
+
+    <div *ngIf="formData.items.length === 0" class="alert alert-info">
+      Haz clic en un producto para agregarlo
+    </div>
+
+    <!-- 🔽 OPCIONAL: si tienes muchos items puedes activar scroll aquí -->
+    <div class="right-scroll">
+
+      <div *ngFor="let item of formData.items; let i = index" class="card mb-3">
+        <div class="card-body">
+
+          <div *ngIf="errors['item_' + i + '_product']" class="alert alert-danger alert-sm mb-2">
+            {{ errors['item_' + i + '_product'] }}
+          </div>
+          <div *ngIf="errors['item_' + i + '_quantity']" class="alert alert-danger alert-sm mb-2">
+            {{ errors['item_' + i + '_quantity'] }}
+          </div>
+          <div *ngIf="errors['item_' + i + '_stock']" class="alert alert-danger alert-sm mb-2">
+            {{ errors['item_' + i + '_stock'] }}
+          </div>
+
+          <div class="row align-items-end">
+            <div class="col-md-5">
+              <label class="form-label fw-bold">{{ getProductName(item.productId) || 'Producto' }}</label>
+              <small class="text-muted d-block">
+                Precio: ${{ item.unitPrice?.toFixed(2) || '0.00' }}
+              </small>
+            </div>
+
+            <div class="col-md-2">
+              <label class="form-label">Cantidad</label>
+              <input type="number" min="1" class="form-control" [(ngModel)]="item.quantity"/>
+            </div>
+
+            <div class="col-md-2">
+              <label class="form-label">Disponible</label>
+              <input type="text" class="form-control" [value]="getAvailableStock(item.productId)" readonly />
+            </div>
+
+            <div class="col-md-3">
+              <label class="form-label">Impuestos</label>
+              <select multiple class="form-select" [(ngModel)]="item.impuestoIds" size="2">
+                <option *ngFor="let tax of taxes" [value]="tax.id">
+                  {{ tax.name }} ({{ tax.currentRate || tax.percentage }}%)
+                </option>
+              </select>
+            </div>
+
+            <div class="col-md-2 d-flex gap-2">
+              <button type="button" class="btn btn-danger btn-sm flex-grow-1" 
+                (click)="removeItem(i)" title="Eliminar">
+                <i class="bi bi-trash"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="mt-2 pt-2 border-top">
+            <small class="text-muted">
+              Subtotal: ${{ (item.quantity * (item.unitPrice || 0)).toFixed(2) }}
+            </small>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Resumen -->
+    <div class="card bg-light mt-3" *ngIf="formData.items.length > 0">
+      <div class="card-body">
+        <div class="row">
+          <div class="col-md-6 offset-md-6">
+            <p class="mb-2">
+              <strong>Productos:</strong> {{ formData.items.length }}
+            </p>
+            <p class="mb-2">
+              <strong>Cantidad Total:</strong> 
+              {{ formData.items.reduce((sum, item) => sum + (item.quantity || 0), 0) }}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+        </div>
+      </div>
+
+      <!-- FOOTER -->
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="closeModal()">Cancelar</button>
+        <button type="button" class="btn btn-primary" (click)="saveInvoice()">
+          <i class="bi bi-check"></i> Guardar Factura
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+  <div class="modal-backdrop fade" [class.show]="isModalOpen" *ngIf="isModalOpen"></div>
+</div>

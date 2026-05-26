@@ -1,0 +1,110 @@
+<div class="container-fluid">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Gestión de Productos</h1>
+    <button class="btn btn-primary" (click)="openModal()">
+      <i class="bi bi-plus"></i> Nuevo Producto
+    </button>
+  </div>
+
+  <div *ngIf="message" class="alert" [class]="'alert-' + messageType" role="alert">
+    {{ message }}
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <input 
+        type="text" 
+        class="form-control" 
+        placeholder="Buscar producto (nombre)"
+        (keyup)="onSearchChange($event.target.value)"
+      />
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <div *ngIf="loading" class="text-center p-5">
+        <div class="spinner-border" role="status">
+          <span class="visually-hidden">Cargando...</span>
+        </div>
+      </div>
+
+      <table *ngIf="!loading" class="table table-hover">
+        <thead class="table-dark">
+          <tr>
+            <th>ID</th>
+            <th>Nombre</th>
+            <th>Precio</th>
+            <th>Stock</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let product of filteredProducts">
+            <td>{{ product.id }}</td>
+            <td>{{ product.name }}</td>
+            <td>${{ product.price.toFixed(2) }}</td>
+            <td>
+              <span class="badge" [class]="product.stock > 0 ? 'bg-success' : 'bg-danger'">
+                {{ product.stock }}
+              </span>
+            </td>
+            <td>
+              <button class="btn btn-sm btn-warning" (click)="openModal(product)">
+                <i class="bi bi-pencil"></i>
+              </button>
+              <button class="btn btn-sm btn-danger ms-2" (click)="deleteProduct(product.id)">
+                <i class="bi bi-trash"></i>
+              </button>
+            </td>
+          </tr>
+          <tr *ngIf="filteredProducts.length === 0">
+            <td colspan="6" class="text-center text-muted">
+              {{ searchTerm ? 'Sin resultados' : 'No hay productos registrados' }}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="modal" [class.show]="isModalOpen" [style.display]="isModalOpen ? 'block' : 'none'">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">{{ isEditMode ? 'Editar Producto' : 'Nuevo Producto' }}</h5>
+          <button type="button" class="btn-close" (click)="closeModal()"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Nombre <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" [class.is-invalid]="errors['name']" [(ngModel)]="formData.name" />
+            <div class="invalid-feedback d-block" *ngIf="errors['name']">
+              {{ errors['name'] }}
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Precio <span class="text-danger">*</span></label>
+            <input type="number" step="0.01" class="form-control" [class.is-invalid]="errors['price']" [(ngModel)]="formData.price" />
+            <div class="invalid-feedback d-block" *ngIf="errors['price']">
+              {{ errors['price'] }}
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Stock <span class="text-danger">*</span></label>
+            <input type="number" class="form-control" [class.is-invalid]="errors['stock']" [(ngModel)]="formData.stock" />
+            <div class="invalid-feedback d-block" *ngIf="errors['stock']">
+              {{ errors['stock'] }}
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" (click)="closeModal()">Cancelar</button>
+          <button type="button" class="btn btn-primary" (click)="saveProduct()">Guardar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop fade" [class.show]="isModalOpen" *ngIf="isModalOpen"></div>
+</div>

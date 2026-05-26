@@ -1,0 +1,70 @@
+<div class="d-flex">
+  <!-- Sidebar -->
+  <nav class="sidebar bg-dark text-white p-3" [class.collapsed]="!isSidebarOpen">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h4 class="m-0">
+        <i class="bi bi-shop"></i> Punto de Venta
+      </h4>
+
+    </div>
+
+    <ul class="nav flex-column">
+      <li class="nav-item">
+        <a
+          class="nav-link text-white"
+          routerLink="/dashboard"
+          routerLinkActive="active"
+        >
+          <i class="bi bi-speedometer2"></i>
+          <span *ngIf="isSidebarOpen" class="ms-2">Dashboard</span>
+        </a>
+      </li>
+      <li class="nav-item">
+        <a
+          class="nav-link text-white"
+          routerLink="/clients"
+          routerLinkActive="active"
+        >
+          <i class="bi bi-people"></i>
+          <span *ngIf="isSidebarOpen" class="ms-2">Clientes</span>
+        </a>
+      </li>
+      <li class="nav-item">
+        <a
+          class="nav-link text-white"
+          routerLink="/products"
+          routerLinkActive="active"
+        >
+          <i class="bi bi-box"></i>
+          <span *ngIf="isSidebarOpen" class="ms-2">Productos</span>
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link text-white" routerLink="/taxes" routerLinkActive="active">
+          <i class="bi bi-percent"></i>
+          <span *ngIf="isSidebarOpen" class="ms-2">Impuestos</span>
+        </a>
+      </li>
+      <li class="nav-item">
+        <a
+          class="nav-link text-white"
+          routerLink="/invoices"
+          routerLinkActive="active"
+        >
+          <i class="bi bi-receipt"></i>
+          <span *ngIf="isSidebarOpen" class="ms-2">Facturas</span>
+        </a>
+      </li>
+    </ul>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="flex-grow-1">
+    <header class="bg-light border-bottom p-3">
+      <h2 class="m-0">Sistema de Punto de Venta</h2>
+    </header>
+    <div class="p-4">
+      <router-outlet></router-outlet>
+    </div>
+  </main>
+</div>

@@ -1,0 +1,45 @@
+.modal.show {
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+.table {
+  margin-bottom: 0;
+}
+
+.table th {
+    background-color: #0a0a0a;
+    color: white;
+    font-weight: 600;
+  }
+  
+  .table-hover tbody tr:hover {
+    background-color: #f8f9fa;
+    cursor: pointer;
+  }
+  
+  .badge {
+    font-size: 12px;
+    padding: 0.4em 0.6em;
+  }
+  
+  .form-label {
+    font-weight: 600;
+    color: #0e0e0e;
+  }
+  
+  .card {
+    border: 1px solid #dee2e6;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+  }
+  
+  .modal-header {
+    background-color: #f8f9fa;
+    border-bottom: 2px solid #080808;
+  }
+  
+
+  
+  .btn-primary:hover {
+    background-color: #1a252f;
+    border-color: #131313;
+  }
