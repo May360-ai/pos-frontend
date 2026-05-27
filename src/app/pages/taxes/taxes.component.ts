@@ -1,6 +1,9 @@
-import { Component, OnInit, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy, ChangeDetectorRef, Inject, PLATFORM_ID } from '@angular/core';
+import { isPlatformBrowser } from '@angular/common';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Subject } from 'rxjs';
+import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { ApiService } from '../../services/api.service';
 
 @Component({
@@ -18,9 +21,18 @@ export class TaxesComponent implements OnInit {
   isModalOpen = false;
   isEditMode = false;
   selectedTaxId: number | null = null;
+
+  // 📄 PAGINACIÓN
+  currentPage = 1;
+  pageSize = 10;
+  totalItems = 0;
+  totalPages = 0;
+
   message = '';
   messageType = 'success';
   searchTerm = '';
+  searchField = 'all';
+  private searchSubject = new Subject<string>();
   errors: { [key: string]: string } = {};
 
   formData = {
@@ -30,20 +42,35 @@ export class TaxesComponent implements OnInit {
 
   constructor(
     private apiService: ApiService,
-    private cdr: ChangeDetectorRef
-  ) {}
+    private cdr: ChangeDetectorRef,
+    @Inject(PLATFORM_ID) private platformId: Object
+  ) {
+    // Configurar el debounce para la búsqueda
+    this.searchSubject.pipe(
+      debounceTime(300),
+      distinctUntilChanged()
+    ).subscribe(term => {
+      this.searchTerm = term;
+      this.currentPage = 1; // Resetear a la primera página al buscar
+      this.loadTaxes();
+    });
+  }
 
   ngOnInit() {
-    this.loadTaxes();
+    if (isPlatformBrowser(this.platformId)) {
+      this.loadTaxes();
+    }
   }
 
   loadTaxes() {
     this.loading = true;
     this.cdr.markForCheck();
-    this.apiService.getTaxes().subscribe({
+    this.apiService.getTaxes(this.currentPage, this.pageSize, this.searchTerm, this.searchField).subscribe({
       next: (response: any) => {
         this.taxes = response.data || [];
-        this.filterTaxes();
+        this.filteredTaxes = [...this.taxes];
+        this.totalItems = response.total || 0;
+        this.totalPages = Math.ceil(this.totalItems / this.pageSize);
         this.loading = false;
         this.cdr.markForCheck();
       },
@@ -55,21 +82,21 @@ export class TaxesComponent implements OnInit {
     });
   }
 
-  filterTaxes() {
-    if (!this.searchTerm.trim()) {
-      this.filteredTaxes = [...this.taxes];
-    } else {
-      const term = this.searchTerm.toLowerCase();
-      this.filteredTaxes = this.taxes.filter(tax =>
-        tax.name?.toLowerCase().includes(term)
-      );
+  changePage(page: number) {
+    if (page >= 1 && page <= this.totalPages) {
+      this.currentPage = page;
+      this.loadTaxes();
     }
-    this.cdr.markForCheck();
   }
 
   onSearchChange(value: string) {
-    this.searchTerm = value;
-    this.filterTaxes();
+    this.searchSubject.next(value);
+  }
+
+  onSearchFieldChange(value: string) {
+    this.searchField = value;
+    this.currentPage = 1;
+    this.loadTaxes();
   }
 
   validateForm(): boolean {

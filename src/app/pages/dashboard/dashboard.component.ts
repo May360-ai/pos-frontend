@@ -1,7 +1,8 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, Inject, PLATFORM_ID } from '@angular/core';
+import { isPlatformBrowser } from '@angular/common';
 import { CommonModule } from '@angular/common';
 import { ApiService } from '../../services/api.service';
-import { Observable, forkJoin, map } from 'rxjs';
+import { Observable, of, map } from 'rxjs';
 
 @Component({
   selector: 'app-dashboard',
@@ -17,38 +18,45 @@ export class DashboardComponent implements OnInit {
   invoiceCount$: Observable<number>;
   totalRevenue$: Observable<number>;
 
-  constructor(private apiService: ApiService) {
-    this.clientCount$ = new Observable();
-    this.productCount$ = new Observable();
-    this.taxCount$ = new Observable();
-    this.invoiceCount$ = new Observable();
-    this.totalRevenue$ = new Observable();
+  constructor(
+    private apiService: ApiService,
+    @Inject(PLATFORM_ID) private platformId: Object
+  ) {
+    this.clientCount$ = of(0);
+    this.productCount$ = of(0);
+    this.taxCount$ = of(0);
+    this.invoiceCount$ = of(0);
+    this.totalRevenue$ = of(0);
   }
 
   ngOnInit() {
-    this.loadDashboardData();
+    if (isPlatformBrowser(this.platformId)) {
+      this.loadDashboardData();
+    }
   }
 
   loadDashboardData() {
-    this.clientCount$ = this.apiService.getClients().pipe(
-      map((response: any) => response.data?.length || 0)
+    this.clientCount$ = this.apiService.getClients(1, 1).pipe(
+      map((response: any) => response.total || 0)
     );
 
-    this.productCount$ = this.apiService.getProducts().pipe(
-      map((response: any) => response.data?.length || 0)
+    this.productCount$ = this.apiService.getProducts(1, 1).pipe(
+      map((response: any) => response.total || 0)
     );
 
-    this.taxCount$ = this.apiService.getTaxes().pipe(
-      map((response: any) => response.data?.length || 0)
+    this.taxCount$ = this.apiService.getTaxes(1, 1).pipe(
+      map((response: any) => response.total || 0)
     );
 
-    this.invoiceCount$ = this.apiService.getInvoices().pipe(
-      map((response: any) => response.data?.length || 0)
+    this.invoiceCount$ = this.apiService.getInvoices(1, 1).pipe(
+      map((response: any) => response.total || 0)
     );
 
-    this.totalRevenue$ = this.apiService.getInvoices().pipe(
+    // Para la recaudación total, necesitamos sumar todas las facturas. 
+    // Como el backend es paginado, pedimos una página con límite alto para el dashboard.
+    this.totalRevenue$ = this.apiService.getInvoices(1, 1000).pipe(
       map((response: any) =>
-        response.data?.reduce((sum: number, inv: any) => sum + (inv.totalSnapshot || 0), 0) || 0
+        (response.data || []).reduce((sum: number, inv: any) => sum + (Number(inv.totalSnapshot) || 0), 0)
       )
     );
   }

@@ -1,6 +1,9 @@
-import { Component, OnInit, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy, ChangeDetectorRef, Inject, PLATFORM_ID } from '@angular/core';
+import { isPlatformBrowser } from '@angular/common';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Subject } from 'rxjs';
+import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { ApiService } from '../../services/api.service';
 
 @Component({
@@ -24,9 +27,18 @@ export class InvoicesComponent implements OnInit {
   isViewMode = false;
   selectedInvoiceId: number | null = null;
   selectedInvoice: any = null;
+
+  // 📄 PAGINACIÓN
+  currentPage = 1;
+  pageSize = 10;
+  totalItems = 0;
+  totalPages = 0;
+
   message = '';
   messageType = 'success';
   searchTerm = '';
+  searchField = 'all';
+  private searchSubject = new Subject<string>();
   productSearchTerm = '';
   errors: { [key: string]: string } = {};
 
@@ -38,27 +50,42 @@ export class InvoicesComponent implements OnInit {
 
   constructor(
     private apiService: ApiService,
-    private cdr: ChangeDetectorRef
-  ) {}
+    private cdr: ChangeDetectorRef,
+    @Inject(PLATFORM_ID) private platformId: Object
+  ) {
+    // Configurar el debounce para la búsqueda
+    this.searchSubject.pipe(
+      debounceTime(300),
+      distinctUntilChanged()
+    ).subscribe(term => {
+      this.searchTerm = term;
+      this.currentPage = 1; // Resetear a la primera página al buscar
+      this.loadInvoices();
+    });
+  }
 
   ngOnInit() {
-    this.loadInvoices();
-    this.loadClients();
-    this.loadProducts();
-    this.loadTaxes();
+    if (isPlatformBrowser(this.platformId)) {
+      this.loadInvoices();
+      this.loadClients();
+      this.loadProducts();
+      this.loadTaxes();
+    }
   }
 
   loadInvoices() {
     this.loading = true;
     this.cdr.markForCheck();
-    this.apiService.getInvoices().subscribe({
+    this.apiService.getInvoices(this.currentPage, this.pageSize, this.searchTerm, this.searchField).subscribe({
       next: (response: any) => {
         this.invoices = (response.data || []).map((invoice: any) => ({
           ...invoice,
           items: invoice.details || [],
           details: undefined
         }));
-        this.filterInvoices();
+        this.filteredInvoices = [...this.invoices];
+        this.totalItems = response.total || 0;
+        this.totalPages = Math.ceil(this.totalItems / this.pageSize);
         this.loading = false;
         this.cdr.markForCheck();
       },
@@ -70,57 +97,39 @@ export class InvoicesComponent implements OnInit {
     });
   }
 
-  filterInvoices() {
-    if (!this.searchTerm.trim()) {
-      this.filteredInvoices = [...this.invoices];
-    } else {
-      const term = this.searchTerm.toLowerCase();
-      this.filteredInvoices = this.invoices.filter(invoice =>
-        invoice.id.toString().includes(term) ||
-        this.getClientName(invoice.clientId).toLowerCase().includes(term) ||
-        invoice.transactionId?.toLowerCase().includes(term)
-      );
-    }
-    this.cdr.markForCheck();
+  onSearchChange(value: string) {
+    this.searchSubject.next(value);
   }
 
-  onSearchChange(span: string) {
-    this.searchTerm = span;
-    this.filterInvoices();
+  onSearchFieldChange(value: string) {
+    this.searchField = value;
+    this.currentPage = 1;
+    this.loadInvoices();
   }
 
-  filterProducts() {
-    if (!this.productSearchTerm.trim()) {
+  onProductSearchChange(value: string) {
+    this.productSearchTerm = value;
+    if (!value) {
       this.filteredProducts = [...this.products];
     } else {
-      const term = this.productSearchTerm.toLowerCase();
-      this.filteredProducts = this.products.filter(product =>
-        product.name?.toLowerCase().includes(term) ||
+      const term = value.toLowerCase();
+      this.filteredProducts = this.products.filter(product => 
+        product.name.toLowerCase().includes(term) || 
         product.description?.toLowerCase().includes(term)
       );
     }
     this.cdr.markForCheck();
   }
 
-  onProductSearchChange(span: string) {
-    this.productSearchTerm = span;
-    this.filterProducts();
-  }
-
-    filterClients() {
-    const term = this.searchTerm.toLowerCase();
-
-    this.filteredClients = this.clients.filter(c =>
-      (c.firstName + ' ' + c.lastName).toLowerCase().includes(term) ||
-      c.email.toLowerCase().includes(term) ||
-      c.phone.includes(term)
-    );
-
-    this.cdr.markForCheck();
+  changePage(page: number) {
+    if (page >= 1 && page <= this.totalPages) {
+      this.currentPage = page;
+      this.loadInvoices();
+    }
   }
 
   loadClients() {
-    this.apiService.getClients().subscribe({
+    this.apiService.getClients(1, 1000).subscribe({
       next: (response: any) => {
         this.clients = response.data || [];
         this.filteredClients = [...this.clients]; 
@@ -131,7 +140,7 @@ export class InvoicesComponent implements OnInit {
   }
 
   loadProducts() {
-    this.apiService.getProducts().subscribe({
+    this.apiService.getProductsForSale(1, 1000).subscribe({
       next: (response: any) => {
         this.products = response.data || [];
         this.filteredProducts = [...this.products];
@@ -142,7 +151,7 @@ export class InvoicesComponent implements OnInit {
   }
 
   loadTaxes() {
-    this.apiService.getTaxes().subscribe({
+    this.apiService.getTaxes(1, 1000).subscribe({
       next: (response: any) => {
         this.taxes = response.data || [];
         this.cdr.markForCheck();
@@ -155,46 +164,44 @@ export class InvoicesComponent implements OnInit {
     const product = this.products.find(p => p.id === productId);
     if (!product) return 0;
 
-    // Obtener cantidad ya agregada en la factura actual (excluyendo el item actual)
     const usedQuantity = this.formData.items
       .filter(item => item.productId === productId)
       .reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
 
     const available = product.stock - usedQuantity;
-    return Math.max(0, available); // Nunca retornar negativo
+    return Math.max(0, available);
   }
 
   validateForm(): boolean {
-  this.errors = {};
+    this.errors = {};
 
-  if (!this.formData.clientId) {
-    this.errors['clientId'] = 'Debe seleccionar un cliente';
-  }
-
-  if (this.formData.items.length === 0) {
-    this.errors['items'] = 'Debe agregar al menos un producto';
-  }
-
-  for (let i = 0; i < this.formData.items.length; i++) {
-    const item = this.formData.items[i];
-    if (!item.productId) {
-      this.errors[`item_${i}_product`] = 'Debe seleccionar un producto';
-    }
-    
-    const quantity = Number(item.quantity);
-    if (!quantity || quantity <= 0) {
-      this.errors[`item_${i}_quantity`] = 'La cantidad debe ser mayor a 0';
+    if (!this.formData.clientId) {
+      this.errors['clientId'] = 'Debe seleccionar un cliente';
     }
 
-    // Validar stock (comparar contra stock del producto, no disponible)
-    const product = this.products.find(p => p.id === item.productId);
-    if (product && quantity > product.stock) {
-      this.errors[`item_${i}_stock`] = `Stock insuficiente. Stock total: ${product.stock}`;
+    if (this.formData.items.length === 0) {
+      this.errors['items'] = 'Debe agregar al menos un producto';
     }
-  }
 
-  return Object.keys(this.errors).length === 0;
-}
+    for (let i = 0; i < this.formData.items.length; i++) {
+      const item = this.formData.items[i];
+      if (!item.productId) {
+        this.errors[`item_${i}_product`] = 'Debe seleccionar un producto';
+      }
+      
+      const quantity = Number(item.quantity);
+      if (!quantity || quantity <= 0) {
+        this.errors[`item_${i}_quantity`] = 'La cantidad debe ser mayor a 0';
+      }
+
+      const product = this.products.find(p => p.id === item.productId);
+      if (product && quantity > product.stock) {
+        this.errors[`item_${i}_stock`] = `Stock insuficiente. Stock total: ${product.stock}`;
+      }
+    }
+
+    return Object.keys(this.errors).length === 0;
+  }
 
   addItem() {
     this.formData.items.push({ 
@@ -216,7 +223,6 @@ export class InvoicesComponent implements OnInit {
     if (product) {
       this.formData.items[index].productName = product.name;
       this.formData.items[index].unitPrice = product.price;
-      // Resetear cantidad a 1 al cambiar producto
       this.formData.items[index].quantity = 1;
     }
     this.cdr.markForCheck();
@@ -227,29 +233,21 @@ export class InvoicesComponent implements OnInit {
     this.errors = {};
     this.productSearchTerm = '';
     this.filteredProducts = [...this.products];
-
-    // Nunca permitir editar facturas (solo crear nuevas)
     this.formData = { 
       clientId: 0, 
-      invoiceDate: new Date().toISOString().split('T')[0], // Fecha automática de hoy
+      invoiceDate: new Date().toISOString().split('T')[0],
       items: [] 
     };
-    
     this.isModalOpen = true;
     this.cdr.markForCheck();
   }
 
-
-    addItemWithProduct(product: any) {
-    // Verificar si el producto ya está en la factura
+  addItemWithProduct(product: any) {
     const existingItem = this.formData.items.find(item => item.productId === product.id);
-    
     if (existingItem) {
-      // Si ya existe, incrementar cantidad
       existingItem.quantity += 1;
       this.showMessage(`Se incrementó la cantidad de ${product.name}`, 'info');
     } else {
-      // Si no existe, agregarlo
       this.formData.items.push({
         productId: product.id,
         quantity: 1,
@@ -283,72 +281,84 @@ export class InvoicesComponent implements OnInit {
     this.cdr.markForCheck();
   }
 
-saveInvoice() {
-  if (!this.validateForm()) {
-    return;
+  showPreview() {
+    if (!this.validateForm()) {
+      return;
+    }
+
+    let subtotal = 0;
+    let taxTotal = 0;
+
+    const previewItems = this.formData.items.map((item: any) => {
+      const product = this.products.find(p => p.id === Number(item.productId));
+      const itemSubtotal = (item.quantity || 0) * (product?.price || 0);
+      subtotal += itemSubtotal;
+
+      const detailTaxes = (item.impuestoIds || []).map((taxId: any) => {
+        const tax = this.taxes.find(t => t.id === Number(taxId));
+        const rate = Number(tax?.currentRate || 0);
+        const amount = (itemSubtotal * rate) / 100;
+        taxTotal += amount;
+        return {
+          taxId: Number(taxId),
+          rateSnapshot: rate,
+          calculatedAmountSnapshot: amount
+        };
+      });
+
+      return {
+        productId: item.productId,
+        quantity: item.quantity,
+        unitPriceSnapshot: product?.price || 0,
+        detailTaxes: detailTaxes
+      };
+    });
+
+    this.selectedInvoice = {
+      clientId: Number(this.formData.clientId),
+      invoiceDate: this.formData.invoiceDate,
+      subtotalSnapshot: subtotal,
+      taxTotalSnapshot: taxTotal,
+      totalSnapshot: subtotal + taxTotal,
+      items: previewItems,
+      isPreCreation: true
+    };
+
+    this.isViewMode = true;
+    this.cdr.markForCheck();
   }
 
-  const clientId = Number(this.formData.clientId);
-  if (!clientId) {
-    this.showMessage('Selecciona un cliente válido', 'warning');
-    return;
-  }
+  confirmSave() {
+    const data: any = {
+      clientId: Number(this.formData.clientId),
+      items: this.formData.items.map((item: any) => ({
+        productId: Number(item.productId),
+        quantity: Number(item.quantity),
+        impuestoIds: Array.isArray(item.impuestoIds) ? item.impuestoIds.map((id: any) => Number(id)) : []
+      }))
+    };
 
-  const data: any = {
-    clientId: clientId,
-    invoiceDate: this.formData.invoiceDate,
-    items: this.formData.items.map((item: any) => ({
-      productId: Number(item.productId),
-      quantity: Number(item.quantity),
-      impuestoIds: Array.isArray(item.impuestoIds) ? item.impuestoIds.map((id: any) => Number(id)) : []
-    }))
-  };
-
-  this.apiService.createInvoice(data).subscribe({
-    next: (response: any) => {
-      this.showMessage('Factura creada correctamente', 'success');
-      // Actualizar stock de los productos
-      this.updateProductStock();
-      this.loadInvoices();
-      
-      // Mostrar confirmación y luego imprimir
-      setTimeout(() => {
+    this.apiService.createInvoice(data).subscribe({
+      next: (response: any) => {
+        this.showMessage('Factura creada correctamente', 'success');
+        this.updateProductStock();
+        this.loadInvoices();
         const createdInvoice = response.data || response;
-        this.showConfirmationAndPrint(createdInvoice);
-      }, 500);
-    },
-    error: (err) => {
-      console.error('Error:', err);
-      this.showMessage('Error creando factura: ' + (err.error?.message || 'Desconocido'), 'danger');
-      this.cdr.markForCheck();
-    },
-    complete: () => this.cdr.markForCheck()
-  });
-}
+        this.isModalOpen = false;
+        this.cdr.markForCheck();
 
-showConfirmationAndPrint(invoice: any) {
-  // Cerrar modal de creación
-  this.closeModal();
-  
-  // Preparar factura para vista previa
-  const invoiceWithItems = {
-    ...invoice,
-    items: invoice.details || invoice.items || []
-  };
-  
-  this.selectedInvoice = invoiceWithItems;
-  this.isViewMode = true;
-  this.isModalOpen = true;
-  
-  this.showMessage('¿Deseas imprimir la factura?', 'info');
-  this.cdr.markForCheck();
-}
-
-printFromPreview() {
-  if (this.selectedInvoice) {
-    this.printInvoice(this.selectedInvoice);
+        setTimeout(() => {
+          this.viewInvoice(createdInvoice);
+          this.cdr.markForCheck();
+        }, 100);
+      },
+      error: (err) => {
+        console.error('Error:', err);
+        this.showMessage('Error creando factura: ' + (err.error?.message || 'Desconocido'), 'danger');
+        this.cdr.markForCheck();
+      }
+    });
   }
-}
 
   updateProductStock() {
     for (const item of this.formData.items) {
@@ -371,302 +381,86 @@ printFromPreview() {
     }
   }
 
-printInvoice(invoice: any) {
-  const printWindow = window.open('', '', 'width=1000,height=700');
-  const clientName = this.getClientName(invoice.clientId);
-  const itemsList = invoice.details || invoice.items || [];
-  
-  let itemsHtml = '';
-  let rowNumber = 1;
-  itemsList.forEach((item: any) => {
-    const productName = this.getProductName(item.productId);
-    const taxNames = (item.detailTaxes || [])
-      .map((dt: any) => `${this.getTaxName(dt.taxId)} (${dt.rateSnapshot}%)`)
-      .join('<br>');
-    const itemTaxTotal = (item.detailTaxes || []).reduce((sum: number, dt: any) => 
-      sum + (dt.calculatedAmountSnapshot || 0), 0
-    );
-    const itemTotal = (item.quantity * (item.unitPriceSnapshot || 0)) + itemTaxTotal;
+  printInvoice(invoice: any) {
+    const width = 1000;
+    const height = 700;
+    const left = (window.screen.width / 2) - (width / 2);
+    const top = (window.screen.height / 2) - (height / 2);
     
-    itemsHtml += `
-      <tr>
-        <td style="text-align: center; padding: 12px;">${rowNumber}</td>
-        <td style="text-align: left; padding: 12px;">${productName}</td>
-        <td style="text-align: center; padding: 12px;">${item.quantity}</td>
-        <td style="text-align: right; padding: 12px;">$${item.unitPriceSnapshot?.toFixed(2) || '0.00'}</td>
-        <td style="text-align: left; padding: 12px; font-size: 12px;">
-          ${taxNames || '<span style="color: #999;">Sin impuesto</span>'}
-        </td>
-        <td style="text-align: right; padding: 12px;">$${itemTotal.toFixed(2)}</td>
-      </tr>
-    `;
-    rowNumber++;
-  });
+    const printWindow = window.open('', '', `width=${width},height=${height},left=${left},top=${top}`);
+    const clientName = this.getClientName(invoice.clientId);
+    const itemsList = invoice.details || invoice.items || [];
 
-  const subtotal = invoice.subtotalSnapshot || 0;
-  const taxTotal = invoice.taxTotalSnapshot || 0;
-  const total = invoice.totalSnapshot || 0;
+    let itemsHtml = '';
+    let rowNumber = 1;
+    itemsList.forEach((item: any) => {
+      const productName = this.getProductName(item.productId);
+      const taxNames = (item.detailTaxes || [])
+        .map((dt: any) => `${this.getTaxName(dt.taxId)} (${dt.rateSnapshot}%)`)
+        .join('<br>');
+      const itemTaxTotal = (item.detailTaxes || []).reduce((sum: number, dt: any) => 
+        sum + (dt.calculatedAmountSnapshot || 0), 0
+      );
+      const itemTotal = (item.quantity * (item.unitPriceSnapshot || 0)) + itemTaxTotal;
 
-  const content = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>Factura #${invoice.id}</title>
-      <meta charset="UTF-8">
-      <style>
-        * {
-          margin: 0;
-          padding: 0;
-          box-sizing: border-box;
-        }
-        
-        body {
-          font-family: 'Arial', sans-serif;
-          color: #333;
-          background-color: #fff;
-        }
-        
-        .container {
-          max-width: 900px;
-          margin: 0 auto;
-          padding: 40px 20px;
-        }
-        
-        .header {
-          text-align: center;
-          margin-bottom: 40px;
-          border-bottom: 3px solid #101010;
-          padding-bottom: 20px;
-        }
-        
-        .header h1 {
-          font-size: 36px;
-          margin: 0 0 10px 0;
-          color: #0b0c0c;
-        }
-        
-        .header p {
-          margin: 5px 0;
-          font-size: 14px;
-          color: #666;
-        }
-        
-        .invoice-info {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 20px;
-          margin-bottom: 30px;
-          padding: 20px;
-          background-color: #f8f9fa;
-          border-radius: 5px;
-        }
-        
-        .invoice-info-item {
-          display: flex;
-          flex-direction: column;
-        }
-        
-        .invoice-info-item label {
-          font-weight: bold;
-          color: #0c0c0c;
-          margin-bottom: 5px;
-        }
-        
-        .invoice-info-item span {
-          color: #555;
-          font-size: 15px;
-        }
-        
-        table {
-          width: 100%;
-          border-collapse: collapse;
-          margin-bottom: 30px;
-        }
-        
-        table thead {
-          background-color: #050505;
-          color: white;
-        }
-        
-        table th {
-          padding: 15px 12px;
-          text-align: left;
-          font-weight: 600;
-          font-size: 13px;
-          border: 1px solid #151516;
-        }
-        
-        table tbody tr {
-          border-bottom: 1px solid #dee2e6;
-        }
-        
-        table tbody tr:hover {
-          background-color: #f8f9fa;
-        }
-        
-        table td {
-          padding: 12px;
-          border: 1px solid #dee2e6;
-          font-size: 13px;
-          vertical-align: top;
-        }
-        
-        .total-section {
-          display: flex;
-          justify-content: flex-end;
-          margin-top: 30px;
-        }
-        
-        .total-box {
-          width: 350px;
-          background-color: #f8f9fa;
-          border: 2px solid #0f0f0f;
-          border-radius: 5px;
-          padding: 20px;
-        }
-        
-        .total-row {
-          display: flex;
-          justify-content: space-between;
-          padding: 10px 0;
-          border-bottom: 1px solid #dee2e6;
-          font-size: 14px;
-        }
-        
-        .total-row.grand {
-          font-size: 18px;
-          font-weight: bold;
-          color: #2c3e50;
-          border: none;
-          padding: 15px 0;
-          background-color: white;
-          margin-top: 10px;
-        }
-        
-        .total-row label {
-          font-weight: 600;
-          color: #333;
-        }
-        
-        .total-row span {
-          text-align: right;
-          color: #050606;
-        }
-        
-        .footer {
-          text-align: center;
-          margin-top: 40px;
-          padding-top: 20px;
-          border-top: 1px solid #dee2e6;
-          font-size: 12px;
-          color: #666;
-        }
-        
-        .print-button {
-          display: block;
-          margin: 30px auto;
-          padding: 12px 30px;
-          font-size: 16px;
-          background-color: #090909;
-          color: white;
-          border: none;
-          border-radius: 5px;
-          cursor: pointer;
-          text-align: center;
-        }
-        
-        .print-button:hover {
-          background-color: #131414;
-        }
-        
-        @media print {
-          .print-button {
-            display: none;
-          }
-          body {
-            margin: 0;
-            padding: 0;
-          }
-          .container {
-            padding: 0;
-          }
-        }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          <h1>FACTURA</h1>
-          <p>Número: <strong>#${invoice.id}</strong></p>
-        </div>
-        
-        <div class="invoice-info">
-          <div class="invoice-info-item">
-            <label>Cliente:</label>
-            <span>${clientName}</span>
-          </div>
-          <div class="invoice-info-item">
-            <label>Fecha de Emisión:</label>
-            <span>${new Date(invoice.issueDate || invoice.invoiceDate).toLocaleDateString('es-ES', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric'
-            })}</span>
-          </div>
-        </div>
+      itemsHtml += `
+        <tr>
+          <td style="text-align: center; padding: 12px;">${rowNumber}</td>
+          <td style="text-align: left; padding: 12px;">${productName}</td>
+          <td style="text-align: center; padding: 12px;">${item.quantity}</td>
+          <td style="text-align: right; padding: 12px;">$${item.unitPriceSnapshot?.toFixed(2) || '0.00'}</td>
+          <td style="text-align: left; padding: 12px; font-size: 12px;">
+            ${taxNames || '<span style="color: #999;">Sin impuesto</span>'}
+          </td>
+          <td style="text-align: right; padding: 12px;">$${itemTotal.toFixed(2)}</td>
+        </tr>
+      `;
+      rowNumber++;
+    });
 
+    const subtotal = invoice.subtotalSnapshot || 0;
+    const taxTotal = invoice.taxTotalSnapshot || 0;
+    const total = invoice.totalSnapshot || 0;
+
+    const content = `
+      <html>
+      <head>
+        <title>Factura #${invoice.id}</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 40px; }
+          .header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 20px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+          th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+          th { background: #f4f4f4; }
+          .totals { margin-top: 20px; text-align: right; }
+        </style>
+      </head>
+      <body>
+        <div class="header"><h1>FACTURA #${invoice.id}</h1></div>
+        <p>Cliente: ${clientName}</p>
+        <p>Fecha: ${new Date(invoice.issueDate || invoice.invoiceDate).toLocaleDateString()}</p>
         <table>
-          <thead>
-            <tr>
-              <th style="width: 5%; text-align: center;">N°</th>
-              <th style="width: 30%; text-align: left;">Producto</th>
-              <th style="width: 10%; text-align: center;">Cantidad</th>
-              <th style="width: 13%; text-align: right;">Precio Unit.</th>
-              <th style="width: 22%; text-align: left;">Impuestos</th>
-              <th style="width: 15%; text-align: right;">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${itemsHtml}
-          </tbody>
+          <thead><tr><th>N°</th><th>Producto</th><th>Cant.</th><th>Precio</th><th>Total</th></tr></thead>
+          <tbody>${itemsHtml}</tbody>
         </table>
-
-        <div class="total-section">
-          <div class="total-box">
-            <div class="total-row">
-              <label>Subtotal:</label>
-              <span>$${subtotal.toFixed(2)}</span>
-            </div>
-            <div class="total-row">
-              <label>Impuestos:</label>
-              <span>$${taxTotal.toFixed(2)}</span>
-            </div>
-            <div class="total-row grand">
-              <label>TOTAL:</label>
-              <span>$${total.toFixed(2)}</span>
-            </div>
-          </div>
+        <div class="totals">
+          <p>Subtotal: $${subtotal.toFixed(2)}</p>
+          <p>Impuestos: $${taxTotal.toFixed(2)}</p>
+          <h3>TOTAL: $${total.toFixed(2)}</h3>
         </div>
+      </body>
+      </html>
+    `;
+    printWindow!.document.write(content);
+    printWindow!.document.close();
+    this.closeModal();
+  }
 
-        <div class="footer">
-          <p>Gracias por su compra</p>
-          <p>Esta es una factura generada automáticamente por el sistema</p>
-        </div>
-      </div>
-
-      <button class="print-button" onclick="window.print()">Imprimir / Descargar PDF</button>
-    </body>
-    </html>
-  `;
-
-  printWindow!.document.write(content);
-  printWindow!.document.close();
-}
-
-  getClientName(id: number): string {
-    const client = this.clients.find(c => c.id === id);
-    return client ? `${client.firstName} ${client.lastName}` : '';
+  getClientName(id: any): string {
+    const clientId = Number(id);
+    if (!clientId || clientId === 0) return 'Consumidor Final';
+    const client = this.clients.find(c => Number(c.id) === clientId);
+    return client ? (client.firstName + ' ' + client.lastName).trim() : `Cliente #${clientId}`;
   }
 
   getProductName(id: number): string {

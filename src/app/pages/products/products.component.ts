@@ -1,6 +1,9 @@
-import { Component, OnInit, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy, ChangeDetectorRef, Inject, PLATFORM_ID } from '@angular/core';
+import { isPlatformBrowser } from '@angular/common';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Subject } from 'rxjs';
+import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { ApiService } from '../../services/api.service';
 
 @Component({
@@ -18,9 +21,18 @@ export class ProductsComponent implements OnInit {
   isModalOpen = false;
   isEditMode = false;
   selectedProductId: number | null = null;
+
+  // 📄 PAGINACIÓN
+  currentPage = 1;
+  pageSize = 10;
+  totalItems = 0;
+  totalPages = 0;
+
   message = '';
   messageType = 'success';
   searchTerm = '';
+  searchField = 'all';
+  private searchSubject = new Subject<string>();
   errors: { [key: string]: string } = {};
 
   formData = {
@@ -31,20 +43,35 @@ export class ProductsComponent implements OnInit {
 
   constructor(
     private apiService: ApiService,
-    private cdr: ChangeDetectorRef
-  ) {}
+    private cdr: ChangeDetectorRef,
+    @Inject(PLATFORM_ID) private platformId: Object
+  ) {
+    // Configurar el debounce para la búsqueda
+    this.searchSubject.pipe(
+      debounceTime(300),
+      distinctUntilChanged()
+    ).subscribe(term => {
+      this.searchTerm = term;
+      this.currentPage = 1; // Resetear a la primera página al buscar
+      this.loadProducts();
+    });
+  }
 
   ngOnInit() {
-    this.loadProducts();
+    if (isPlatformBrowser(this.platformId)) {
+      this.loadProducts();
+    }
   }
 
   loadProducts() {
     this.loading = true;
     this.cdr.markForCheck();
-    this.apiService.getProducts().subscribe({
+    this.apiService.getProducts(this.currentPage, this.pageSize, this.searchTerm, this.searchField).subscribe({
       next: (response: any) => {
         this.products = response.data || [];
-        this.filterProducts();
+        this.filteredProducts = [...this.products];
+        this.totalItems = response.total || 0;
+        this.totalPages = Math.ceil(this.totalItems / this.pageSize);
         this.loading = false;
         this.cdr.markForCheck();
       },
@@ -56,21 +83,21 @@ export class ProductsComponent implements OnInit {
     });
   }
 
-  filterProducts() {
-    if (!this.searchTerm.trim()) {
-      this.filteredProducts = [...this.products];
-    } else {
-      const term = this.searchTerm.toLowerCase();
-      this.filteredProducts = this.products.filter(product =>
-        product.name?.toLowerCase().includes(term)
-      );
+  changePage(page: number) {
+    if (page >= 1 && page <= this.totalPages) {
+      this.currentPage = page;
+      this.loadProducts();
     }
-    this.cdr.markForCheck();
   }
 
   onSearchChange(value: string) {
-    this.searchTerm = value;
-    this.filterProducts();
+    this.searchSubject.next(value);
+  }
+
+  onSearchFieldChange(value: string) {
+    this.searchField = value;
+    this.currentPage = 1;
+    this.loadProducts();
   }
 
   validateForm(): boolean {

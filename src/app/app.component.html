@@ -1,4 +1,4 @@
-<div class="d-flex">
+<div class="d-flex" *ngIf="authService.isLoggedIn(); else loginLayout">
   <!-- Sidebar -->
   <nav class="sidebar bg-dark text-white p-3" [class.collapsed]="!isSidebarOpen">
     <div class="d-flex justify-content-between align-items-center mb-4">
@@ -56,15 +56,31 @@
         </a>
       </li>
     </ul>
+    
+    <div class="mt-auto pt-4 border-top">
+      <button class="btn btn-outline-light w-100 text-start" (click)="logout()">
+        <i class="bi bi-box-arrow-right"></i>
+        <span *ngIf="isSidebarOpen" class="ms-2">Cerrar Sesión</span>
+      </button>
+    </div>
   </nav>
 
   <!-- Main Content -->
   <main class="flex-grow-1">
-    <header class="bg-light border-bottom p-3">
+    <header class="bg-light border-bottom p-3 d-flex justify-content-between align-items-center">
       <h2 class="m-0">Sistema de Punto de Venta</h2>
+      <div class="user-info">
+        <span class="me-3">{{ authService.currentUserValue?.email }}</span>
+      </div>
     </header>
     <div class="p-4">
       <router-outlet></router-outlet>
     </div>
   </main>
 </div>
+
+<ng-template #loginLayout>
+  <div class="login-layout">
+    <router-outlet></router-outlet>
+  </div>
+</ng-template>

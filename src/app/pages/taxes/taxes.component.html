@@ -14,12 +14,21 @@
 
   <div class="card mb-3">
     <div class="card-body">
-      <input 
-        type="text" 
-        class="form-control" 
-        placeholder="Buscar impuesto..."
-        (keyup)="onSearchChange($event.target.value)"
-      />
+      <div class="input-group">
+        <select class="form-select" style="max-width: 150px;" (change)="onSearchFieldChange($any($event.target).value)">
+          <option value="all">Todo</option>
+          <option value="id">ID</option>
+          <option value="name">Nombre</option>
+        </select>
+        <input 
+          #searchInput
+          type="text" 
+          class="form-control" 
+          placeholder="Buscar impuesto..."
+          [value]="searchTerm"
+          (keyup)="onSearchChange(searchInput.value)"
+        />
+      </div>
     </div>
   </div>
 

@@ -1,6 +1,9 @@
-import { Component, OnInit, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy, ChangeDetectorRef, Inject, PLATFORM_ID } from '@angular/core';
+import { isPlatformBrowser } from '@angular/common';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Subject } from 'rxjs';
+import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { ApiService } from '../../services/api.service';
 
 @Component({
@@ -16,12 +19,20 @@ export class ClientsComponent implements OnInit {
   clients: any[] = [];
   filteredClients: any[] = []; 
 
-  searchTerm: string = ''; 
+  searchTerm: string = '';
+  searchField: string = 'all';
+  private searchSubject = new Subject<string>();
 
   loading = false;
   isModalOpen = false;
   isEditMode = false;
   selectedClientId: number | null = null;
+
+  // 📄 PAGINACIÓN
+  currentPage = 1;
+  pageSize = 10;
+  totalItems = 0;
+  totalPages = 0;
 
   message = '';
   messageType = 'success';
@@ -36,11 +47,24 @@ export class ClientsComponent implements OnInit {
 
   constructor(
     private apiService: ApiService,
-    private cdr: ChangeDetectorRef
-  ) {}
+    private cdr: ChangeDetectorRef,
+    @Inject(PLATFORM_ID) private platformId: Object
+  ) {
+    // Configurar el debounce para la búsqueda
+    this.searchSubject.pipe(
+      debounceTime(300),
+      distinctUntilChanged()
+    ).subscribe(term => {
+      this.searchTerm = term;
+      this.currentPage = 1; // Resetear a la primera página al buscar
+      this.loadClients();
+    });
+  }
 
   ngOnInit() {
-    this.loadClients();
+    if (isPlatformBrowser(this.platformId)) {
+      this.loadClients();
+    }
   }
 
   // 🔹 CARGAR CLIENTES
@@ -48,10 +72,12 @@ export class ClientsComponent implements OnInit {
     this.loading = true;
     this.cdr.markForCheck();
 
-    this.apiService.getClients().subscribe({
+    this.apiService.getClients(this.currentPage, this.pageSize, this.searchTerm, this.searchField).subscribe({
       next: (response: any) => {
         this.clients = response.data || [];
         this.filteredClients = [...this.clients]; 
+        this.totalItems = response.total || 0;
+        this.totalPages = Math.ceil(this.totalItems / this.pageSize);
         this.loading = false;
         this.cdr.markForCheck();
       },
@@ -63,17 +89,22 @@ export class ClientsComponent implements OnInit {
     });
   }
 
-  // 🔍 FILTRO EN TIEMPO REAL
-  filterClients() {
-    const term = this.searchTerm.toLowerCase();
+  changePage(page: number) {
+    if (page >= 1 && page <= this.totalPages) {
+      this.currentPage = page;
+      this.loadClients();
+    }
+  }
 
-    this.filteredClients = this.clients.filter(c =>
-      (c.firstName + ' ' + c.lastName).toLowerCase().includes(term) ||
-      c.email.toLowerCase().includes(term) ||
-      c.phone.includes(term)
-    );
+  // 🔍 BÚSQUEDA EN SERVIDOR
+  onSearchChange(value: string) {
+    this.searchSubject.next(value);
+  }
 
-    this.cdr.markForCheck(); // 🔥 CLAVE por OnPush
+  onSearchFieldChange(value: string) {
+    this.searchField = value;
+    this.currentPage = 1;
+    this.loadClients();
   }
 
   openModal(client?: any) {

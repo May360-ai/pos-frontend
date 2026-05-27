@@ -12,14 +12,21 @@
 
   <div class="card mb-3">
     <div class="card-body">
-      <input 
-        type="text" 
-        class="form-control" 
-        placeholder="Buscar factura (ID, cliente, transacción...)"
-        (keyup)="onSearchChange($event.target.value)"
-      />
+      <div class="input-group">
+        <select class="form-select" style="max-width: 150px;" (change)="onSearchFieldChange($any($event.target).value)">
+          <option value="all">Todo</option>
+          <option value="id">ID</option>
+        </select>
+        <input 
+          type="text" 
+          class="form-control" 
+          placeholder="Buscar factura..."
+          (keyup)="onSearchChange($any($event.target).value)"
+        />
+      </div>
     </div>
   </div>
+
 
   <div class="card">
     <div class="card-body">
@@ -65,6 +72,26 @@
           </tr>
         </tbody>
       </table>
+
+      <!-- 📄 CONTROLES DE PAGINACIÓN -->
+      <div class="d-flex justify-content-between align-items-center mt-3" *ngIf="!loading && totalItems > 0">
+        <small class="text-muted">
+          Mostrando {{ filteredInvoices.length }} de {{ totalItems }} facturas
+        </small>
+        <nav>
+          <ul class="pagination pagination-sm mb-0">
+            <li class="page-item" [class.disabled]="currentPage === 1">
+              <button class="page-link" (click)="changePage(currentPage - 1)">Anterior</button>
+            </li>
+            <li class="page-item active">
+              <span class="page-link">{{ currentPage }} / {{ totalPages }}</span>
+            </li>
+            <li class="page-item" [class.disabled]="currentPage === totalPages">
+              <button class="page-link" (click)="changePage(currentPage + 1)">Siguiente</button>
+            </li>
+          </ul>
+        </nav>
+      </div>
     </div>
   </div>
 
@@ -194,14 +221,17 @@
       </style>
 
       <div class="modal-header" style="background-color: #080808; color: white;">
-        <h5 class="modal-title" style="color: white;">Factura #{{ selectedInvoice?.id }}</h5>
+        <h5 class="modal-title" style="color: white;">
+          {{ selectedInvoice?.isPreCreation ? 'Vista Previa de Factura' : 'Factura #' + selectedInvoice?.id }}
+        </h5>
         <button type="button" class="btn-close btn-close-white" (click)="closeModal()"></button>
       </div>
 
       <div class="modal-body invoice-preview">
         <div class="header">
-          <h1>FACTURA</h1>
-          <p>Número: <strong>#{{ selectedInvoice?.id }}</strong></p>
+          <h1>{{ selectedInvoice?.isPreCreation ? 'VISTA PREVIA' : 'FACTURA' }}</h1>
+          <p *ngIf="!selectedInvoice?.isPreCreation">Número: <strong>#{{ selectedInvoice?.id }}</strong></p>
+          <p *ngIf="selectedInvoice?.isPreCreation" class="text-danger fw-bold">DOCUMENTO NO VÁLIDO - VISTA PREVIA</p>
         </div>
 
         <div class="invoice-info">
@@ -267,9 +297,16 @@
       </div>
 
       <div class="modal-footer" style="background-color: #f8f9fa; border-top: 2px solid #dee2e6;">
-        <button type="button" class="btn btn-secondary" (click)="closeModal()">Cerrar</button>
-        <button type="button" class="btn btn-success" (click)="printFromPreview()">
-          <i class="bi bi-printer"></i> Imprimir / Descargar PDF
+        <button type="button" class="btn btn-secondary" (click)="selectedInvoice?.isPreCreation ? isViewMode = false : closeModal()">
+          {{ selectedInvoice?.isPreCreation ? 'Volver a Editar' : 'Cerrar' }}
+        </button>
+        
+        <button *ngIf="selectedInvoice?.isPreCreation" type="button" class="btn btn-primary" (click)="confirmSave()">
+          <i class="bi bi-check-circle"></i> Confirmar y Guardar Factura
+        </button>
+
+        <button *ngIf="!selectedInvoice?.isPreCreation" type="button" class="btn btn-success" (click)="printInvoice(selectedInvoice)">
+          <i class="bi bi-printer"></i> Imprimir Factura
         </button>
       </div>
     </div>
@@ -331,10 +368,11 @@
       
       <div class="mb-3">
         <input 
+          #productSearchInput
           type="text" 
           class="form-control" 
           placeholder="Buscar producto..."
-          (keyup)="onProductSearchChange($event.target.value)"
+          (keyup)="onProductSearchChange(productSearchInput.value)"
           [value]="productSearchTerm"
         />
         <small class="text-muted">Se muestran {{ filteredProducts.length }} producto(s)</small>
@@ -464,8 +502,8 @@
       <!-- FOOTER -->
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" (click)="closeModal()">Cancelar</button>
-        <button type="button" class="btn btn-primary" (click)="saveInvoice()">
-          <i class="bi bi-check"></i> Guardar Factura
+        <button type="button" class="btn btn-primary" (click)="showPreview()">
+          <i class="bi bi-eye"></i> Previsualizar Factura
         </button>
       </div>
 
