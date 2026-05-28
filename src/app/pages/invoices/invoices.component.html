@@ -439,7 +439,13 @@
 
             <div class="col-md-2">
               <label class="form-label">Cantidad</label>
-              <input type="number" min="1" class="form-control" [(ngModel)]="item.quantity"/>
+              <input type="number"
+                     min="1"
+                     class="form-control"
+                     [class.is-invalid]="errors['item_' + i + '_quantity'] || errors['item_' + i + '_stock']"
+                     [(ngModel)]="item.quantity"
+                     (keypress)="validarNumeros($event)"
+                     (input)="validateQuantity(i)" />
             </div>
 
             <div class="col-md-2">

@@ -188,7 +188,7 @@ export class InvoicesComponent implements OnInit {
       if (!item.productId) {
         this.errors[`item_${i}_product`] = 'Debe seleccionar un producto';
       }
-      
+
       const quantity = Number(item.quantity);
       if (!quantity || quantity <= 0) {
         this.errors[`item_${i}_quantity`] = 'La cantidad debe ser mayor a 0';
@@ -201,6 +201,23 @@ export class InvoicesComponent implements OnInit {
     }
 
     return Object.keys(this.errors).length === 0;
+  }
+
+  validateQuantity(index: number): void {
+    const item = this.formData.items[index];
+    const quantity = Number(item.quantity);
+
+    if (quantity > 0) {
+      delete this.errors[`item_${index}_quantity`];
+    }
+
+    const product = this.products.find(p => p.id === item.productId);
+    if (product && quantity > product.stock) {
+      this.errors[`item_${index}_stock`] = `Stock insuficiente. Stock: ${product.stock}`;
+    } else {
+      delete this.errors[`item_${index}_stock`];
+    }
+    this.cdr.markForCheck();
   }
 
   addItem() {
@@ -479,5 +496,13 @@ export class InvoicesComponent implements OnInit {
       this.message = '';
       this.cdr.markForCheck();
     }, 3000);
+  }
+
+  validarNumeros(event: KeyboardEvent): void {
+    const charCode = event.key;
+
+    if (!/[0-9]/.test(charCode)) {
+      event.preventDefault();
+    }
   }
 }

@@ -105,6 +105,8 @@ export class ProductsComponent implements OnInit {
 
     if (!this.formData.name?.trim()) {
       this.errors['name'] = 'El nombre es obligatorio';
+    } else if (this.formData.name.length > 30) {
+      this.errors['name'] = 'Máximo 30 caracteres';
     } else if (!/^[a-záéíóúñ0-9\s\-\",]+$/i.test(this.formData.name)) {
       this.errors['name'] = 'El nombre contiene caracteres inválidos';
     }
@@ -119,6 +121,37 @@ export class ProductsComponent implements OnInit {
     }
 
     return Object.keys(this.errors).length === 0;
+  }
+
+  validateName(): void {
+    if (!this.formData.name?.trim()) {
+      this.errors['name'] = 'El nombre es obligatorio';
+    } else if (this.formData.name.length > 30) {
+      this.errors['name'] = 'Máximo 30 caracteres';
+    } else if (!/^[a-záéíóúñ0-9\s\-\",]+$/i.test(this.formData.name)) {
+      this.errors['name'] = 'El nombre contiene caracteres inválidos';
+    } else {
+      delete this.errors['name'];
+    }
+    this.cdr.markForCheck();
+  }
+
+  validatePrice(): void {
+    if (!this.formData.price || this.formData.price <= 0) {
+      this.errors['price'] = 'El precio debe ser mayor a 0';
+    } else {
+      delete this.errors['price'];
+    }
+    this.cdr.markForCheck();
+  }
+
+  validateStock(): void {
+    if (this.formData.stock === null || this.formData.stock === undefined || this.formData.stock < 0) {
+      this.errors['stock'] = 'El stock no puede ser negativo';
+    } else {
+      delete this.errors['stock'];
+    }
+    this.cdr.markForCheck();
   }
 
   openModal(product?: any) {
@@ -153,7 +186,16 @@ export class ProductsComponent implements OnInit {
           this.loadProducts();
           this.closeModal();
         },
-        error: () => this.showMessage('Error actualizando producto', 'danger'),
+        error: (err) => {
+          const errorMsg = err.error?.message || err.error?.error || 'Error actualizando producto';
+          if (err.status === 400 && errorMsg.toLowerCase().includes('name')) {
+            this.errors['name'] = 'Ya existe un producto con ese nombre';
+            this.showMessage('Ya existe un producto con ese nombre', 'danger');
+          } else {
+            this.showMessage(errorMsg, 'danger');
+          }
+          this.cdr.markForCheck();
+        },
         complete: () => this.cdr.markForCheck()
       });
     } else {
@@ -163,7 +205,43 @@ export class ProductsComponent implements OnInit {
           this.loadProducts();
           this.closeModal();
         },
-        error: () => this.showMessage('Error creando producto', 'danger'),
+error: (err) => {
+          const errorMsg = err.error?.message || err.error?.error || err.message || 'Error creando producto';
+          // Handle both 400 and 500 for duplicate name errors
+          if ((err.status === 400 || err.status === 500) && (errorMsg.toLowerCase().includes('name') || errorMsg.toLowerCase().includes('duplicate') || errorMsg.toLowerCase().includes('existe'))) {
+            this.errors['name'] = 'Ya existe un producto con ese nombre';
+            this.showMessage('Ya existe un producto con ese nombre', 'danger');
+          } else if (err.status === 500) {
+            this.errors['name'] = errorMsg || 'Error interno del servidor';
+            this.showMessage(errorMsg || 'Error interno del servidor', 'danger');
+          } else {
+            this.showMessage(errorMsg, 'danger');
+          }
+          this.cdr.markForCheck();
+        },
+        complete: () => this.cdr.markForCheck()
+      });
+    } else {
+      this.apiService.createProduct(this.formData).subscribe({
+        next: () => {
+          this.showMessage('Producto creado correctamente', 'success');
+          this.loadProducts();
+          this.closeModal();
+        },
+        error: (err) => {
+          const errorMsg = err.error?.message || err.error?.error || err.message || 'Error creando producto';
+          // Handle both 400 and 500 for duplicate name errors
+          if ((err.status === 400 || err.status === 500) && (errorMsg.toLowerCase().includes('name') || errorMsg.toLowerCase().includes('duplicate') || errorMsg.toLowerCase().includes('existe'))) {
+            this.errors['name'] = 'Ya existe un producto con ese nombre';
+            this.showMessage('Ya existe un producto con ese nombre', 'danger');
+          } else if (err.status === 500) {
+            this.errors['name'] = errorMsg || 'Error interno del servidor';
+            this.showMessage(errorMsg || 'Error interno del servidor', 'danger');
+          } else {
+            this.showMessage(errorMsg, 'danger');
+          }
+          this.cdr.markForCheck();
+        },
         complete: () => this.cdr.markForCheck()
       });
     }
@@ -190,5 +268,13 @@ export class ProductsComponent implements OnInit {
       this.message = '';
       this.cdr.markForCheck();
     }, 3000);
+  }
+
+  validarNumeros(event: KeyboardEvent): void {
+    const charCode = event.key;
+
+    if (!/[0-9]/.test(charCode)) {
+      event.preventDefault();
+    }
   }
 }

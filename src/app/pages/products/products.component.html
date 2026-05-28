@@ -107,21 +107,38 @@
         <div class="modal-body">
           <div class="mb-3">
             <label class="form-label">Nombre <span class="text-danger">*</span></label>
-            <input type="text" class="form-control" [class.is-invalid]="errors['name']" [(ngModel)]="formData.name" />
+            <input type="text"
+                   class="form-control"
+                   [class.is-invalid]="errors['name']"
+                   [(ngModel)]="formData.name"
+                   (input)="validateName()"
+                   maxlength="30" />
+            <small class="text-muted">{{ formData.name.length }}/30</small>
             <div class="invalid-feedback d-block" *ngIf="errors['name']">
               {{ errors['name'] }}
             </div>
           </div>
           <div class="mb-3">
             <label class="form-label">Precio <span class="text-danger">*</span></label>
-            <input type="number" step="0.01" class="form-control" [class.is-invalid]="errors['price']" [(ngModel)]="formData.price" />
+            <input type="number"
+                   step="0.01"
+                   class="form-control"
+                   [class.is-invalid]="errors['price']"
+                   [(ngModel)]="formData.price"
+                   (input)="validatePrice()"
+                   (keypress)="validarNumeros($event)" />
             <div class="invalid-feedback d-block" *ngIf="errors['price']">
               {{ errors['price'] }}
             </div>
           </div>
           <div class="mb-3">
             <label class="form-label">Stock <span class="text-danger">*</span></label>
-            <input type="number" class="form-control" [class.is-invalid]="errors['stock']" [(ngModel)]="formData.stock" />
+            <input type="number"
+                   class="form-control"
+                   [class.is-invalid]="errors['stock']"
+                   [(ngModel)]="formData.stock"
+                   (input)="validateStock()"
+                   (keypress)="validarNumeros($event)" />
             <div class="invalid-feedback d-block" *ngIf="errors['stock']">
               {{ errors['stock'] }}
             </div>

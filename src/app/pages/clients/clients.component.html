@@ -122,22 +122,23 @@
 
           <div class="modal-body">
 
-            <!-- Nombre -->
+<!-- Nombre -->
             <div class="mb-3">
               <label>Nombre</label>
               <input type="text"
-                      (keypress)="validarLetras($event)"
+                     (keypress)="validarLetras($event)"
                      class="form-control"
-                     
+                     [class.is-invalid]="errors['firstName']"
                      name="firstName"
                      [(ngModel)]="formData.firstName"
                      required
                      pattern="^[A-Za-zÁÉÍÓÚáéíóúñÑ ]+$"
+                     maxlength="30"
                      #firstName="ngModel">
+              <small class="text-muted">{{ formData.firstName.length }}/30</small>
 
-              <div class="text-danger" *ngIf="firstName.invalid && firstName.touched">
-                <small *ngIf="firstName.errors?.['required']">Obligatorio</small>
-                <small *ngIf="firstName.errors?.['pattern']">Solo letras</small>
+              <div class="invalid-feedback d-block" *ngIf="errors['firstName']">
+                {{ errors['firstName'] }}
               </div>
             </div>
 
@@ -145,17 +146,19 @@
             <div class="mb-3">
               <label>Apellido</label>
               <input type="text"
-              (keypress)="validarLetras($event)"
+                     (keypress)="validarLetras($event)"
                      class="form-control"
+                     [class.is-invalid]="errors['lastName']"
                      name="lastName"
-                     
                      [(ngModel)]="formData.lastName"
                      required
                      pattern="^[A-Za-zÁÉÍÓÚáéíóúñÑ ]+$"
+                     maxlength="30"
                      #lastName="ngModel">
+              <small class="text-muted">{{ formData.lastName.length }}/30</small>
 
-              <div class="text-danger" *ngIf="lastName.invalid && lastName.touched">
-                <small>Campo inválido</small>
+              <div class="invalid-feedback d-block" *ngIf="errors['lastName']">
+                {{ errors['lastName'] }}
               </div>
             </div>
 
@@ -164,13 +167,18 @@
               <label>Email</label>
               <input type="email"
                      class="form-control"
+                     [class.is-invalid]="errors['email']"
                      name="email"
                      [(ngModel)]="formData.email"
                      required
+                     pattern="^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+                     maxlength="50"
+                     (input)="validateEmail()"
                      #email="ngModel">
+              <small class="text-muted">{{ formData.email.length }}/50</small>
 
-              <div class="text-danger" *ngIf="email.invalid && email.touched">
-                <small>Email inválido</small>
+              <div class="invalid-feedback d-block" *ngIf="errors['email']">
+                {{ errors['email'] }}
               </div>
             </div>
 
@@ -178,16 +186,20 @@
             <div class="mb-3">
               <label>Teléfono</label>
               <input type="text"
+                     (keypress)="validarNumeros($event)"
                      class="form-control"
+                     [class.is-invalid]="errors['phone']"
                      name="phone"
                      [(ngModel)]="formData.phone"
                      required
                      pattern="^[0-9]+$"
+                     maxlength="10"
+                     (input)="validatePhone()"
                      #phone="ngModel">
+              <small class="text-muted">{{ formData.phone.length }}/10</small>
 
-              <div class="text-danger" *ngIf="phone.invalid && phone.touched">
-                <small *ngIf="phone.errors?.['required']">Obligatorio</small>
-                <small *ngIf="phone.errors?.['pattern']">Solo números</small>
+              <div class="invalid-feedback d-block" *ngIf="errors['phone']">
+                {{ errors['phone'] }}
               </div>
             </div>
 
@@ -195,13 +207,16 @@
             <div class="mb-3">
               <label>Dirección</label>
               <textarea class="form-control"
+                        [class.is-invalid]="errors['address']"
                         name="address"
                         [(ngModel)]="formData.address"
                         required
+                        maxlength="100"
                         #address="ngModel"></textarea>
+              <small class="text-muted">{{ formData.address.length }}/100</small>
 
-              <div class="text-danger" *ngIf="address.invalid && address.touched">
-                <small>Obligatorio</small>
+              <div class="invalid-feedback d-block" *ngIf="errors['address']">
+                {{ errors['address'] }}
               </div>
             </div>
 

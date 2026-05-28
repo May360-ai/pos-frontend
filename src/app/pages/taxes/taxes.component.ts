@@ -104,6 +104,8 @@ export class TaxesComponent implements OnInit {
 
     if (!this.formData.name?.trim()) {
       this.errors['name'] = 'El nombre es obligatorio';
+    } else if (this.formData.name.length > 30) {
+      this.errors['name'] = 'Máximo 30 caracteres';
     } else if (!/^[a-záéíóúñ\s]+$/i.test(this.formData.name)) {
       this.errors['name'] = 'El nombre solo puede contener letras';
     }
@@ -113,6 +115,36 @@ export class TaxesComponent implements OnInit {
     }
 
     return Object.keys(this.errors).length === 0;
+  }
+
+  validateName(): void {
+    if (!this.formData.name?.trim()) {
+      this.errors['name'] = 'El nombre es obligatorio';
+    } else if (this.formData.name.length > 30) {
+      this.errors['name'] = 'Máximo 30 caracteres';
+    } else if (!/^[a-záéíóúñ\s]+$/i.test(this.formData.name)) {
+      this.errors['name'] = 'El nombre solo puede contener letras';
+    } else {
+      delete this.errors['name'];
+    }
+    this.cdr.markForCheck();
+  }
+
+  validateRate(): void {
+    if (!this.formData.currentRate || this.formData.currentRate <= 0 || this.formData.currentRate > 100) {
+      this.errors['currentRate'] = 'El porcentaje debe estar entre 0 y 100';
+    } else {
+      delete this.errors['currentRate'];
+    }
+    this.cdr.markForCheck();
+  }
+
+  validarNumeros(event: KeyboardEvent): void {
+    const charCode = event.key;
+
+    if (!/[0-9]/.test(charCode)) {
+      event.preventDefault();
+    }
   }
 
   openModal(tax?: any) {

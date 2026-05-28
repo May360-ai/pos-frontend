@@ -46,4 +46,5 @@ export const APP_ROUTES: Routes = [
         (m) => m.InvoicesComponent
       ),
   },
+  { path: '**', redirectTo: '/dashboard' },
 ];

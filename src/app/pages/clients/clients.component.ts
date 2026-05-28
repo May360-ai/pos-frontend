@@ -22,6 +22,7 @@ export class ClientsComponent implements OnInit {
   searchTerm: string = '';
   searchField: string = 'all';
   private searchSubject = new Subject<string>();
+  errors: { [key: string]: string } = {};
 
   loading = false;
   isModalOpen = false;
@@ -141,34 +142,36 @@ export class ClientsComponent implements OnInit {
 
   // ✅ VALIDACIONES + GUARDADO
   saveClient() {
+    this.errors = {};
 
     // 🔴 CAMPOS VACÍOS
-    if (!this.formData.firstName ||
-        !this.formData.lastName ||
-        !this.formData.email ||
-        !this.formData.phone ||
-        !this.formData.address) {
-
-      this.showMessage('Completa todos los campos', 'warning');
-      return;
+    if (!this.formData.firstName?.trim()) {
+      this.errors['firstName'] = 'El nombre es obligatorio';
     }
 
-    // 🔴 SOLO LETRAS
-    const nameRegex = /^[A-Za-zÁÉÍÓÚáéíóúñÑ ]+$/;
-
-    if (!nameRegex.test(this.formData.firstName)) {
-      this.showMessage('El nombre solo debe contener letras', 'danger');
-      return;
+    if (!this.formData.lastName?.trim()) {
+      this.errors['lastName'] = 'El apellido es obligatorio';
     }
 
-    if (!nameRegex.test(this.formData.lastName)) {
-      this.showMessage('El apellido solo debe contener letras', 'danger');
-      return;
+    if (!this.formData.email?.trim()) {
+      this.errors['email'] = 'El email es obligatorio';
+    } else if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(this.formData.email)) {
+      this.errors['email'] = 'Formato de email inválido';
     }
 
-    // 🔴 SOLO NÚMEROS
-    if (!/^[0-9]+$/.test(this.formData.phone)) {
-      this.showMessage('El teléfono solo debe contener números', 'danger');
+    if (!this.formData.phone?.trim()) {
+      this.errors['phone'] = 'El teléfono es obligatorio';
+    } else if (!/^[0-9]{10}$/.test(this.formData.phone)) {
+      this.errors['phone'] = 'Debe tener 10 dígitos';
+    }
+
+    if (!this.formData.address?.trim()) {
+      this.errors['address'] = 'La dirección es obligatoria';
+    }
+
+    if (Object.keys(this.errors).length > 0) {
+      this.showMessage('Completa los campos correctamente', 'warning');
+      this.cdr.markForCheck();
       return;
     }
 
@@ -181,7 +184,16 @@ export class ClientsComponent implements OnInit {
           this.loadClients();
           this.closeModal();
         },
-        error: () => this.showMessage('Error actualizando cliente', 'danger'),
+        error: (err) => {
+          const errorMsg = err.error?.message || err.error?.error || '';
+          if (err.status === 400 && errorMsg.toLowerCase().includes('email')) {
+            this.errors['email'] = 'Ya existe un cliente con ese email';
+            this.showMessage('Ya existe un cliente con ese email', 'danger');
+          } else {
+            this.showMessage('Error actualizando cliente', 'danger');
+          }
+          this.cdr.markForCheck();
+        },
         complete: () => this.cdr.markForCheck()
       });
 
@@ -194,17 +206,56 @@ export class ClientsComponent implements OnInit {
           this.loadClients();
           this.closeModal();
         },
-        error: () => this.showMessage('Error creando cliente', 'danger'),
+        error: (err) => {
+          const errorMsg = err.error?.message || err.error?.error || '';
+          if (err.status === 400 && errorMsg.toLowerCase().includes('email')) {
+            this.errors['email'] = 'Ya existe un cliente con ese email';
+            this.showMessage('Ya existe un cliente con ese email', 'danger');
+          } else {
+            this.showMessage('Error creando cliente', 'danger');
+          }
+          this.cdr.markForCheck();
+        },
         complete: () => this.cdr.markForCheck()
       });
 
     }
   }
 
-    validarLetras(event: KeyboardEvent): void {
+  validatePhone(): void {
+    if (!this.formData.phone?.trim()) {
+      this.errors['phone'] = 'El teléfono es obligatorio';
+    } else if (!/^[0-9]{10}$/.test(this.formData.phone)) {
+      this.errors['phone'] = 'Debe tener 10 dígitos';
+    } else {
+      delete this.errors['phone'];
+    }
+    this.cdr.markForCheck();
+  }
+
+  validateEmail(): void {
+    if (!this.formData.email?.trim()) {
+      this.errors['email'] = 'El email es obligatorio';
+    } else if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(this.formData.email)) {
+      this.errors['email'] = 'Formato de email inválido';
+    } else {
+      delete this.errors['email'];
+    }
+    this.cdr.markForCheck();
+  }
+
+  validarLetras(event: KeyboardEvent): void {
     const charCode = event.key;
 
     if (!/[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/.test(charCode)) {
+      event.preventDefault();
+    }
+  }
+
+  validarNumeros(event: KeyboardEvent): void {
+    const charCode = event.key;
+
+    if (!/[0-9]/.test(charCode)) {
       event.preventDefault();
     }
   }
