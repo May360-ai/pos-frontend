@@ -205,32 +205,8 @@ export class ProductsComponent implements OnInit {
           this.loadProducts();
           this.closeModal();
         },
-error: (err) => {
-          const errorMsg = err.error?.message || err.error?.error || err.message || 'Error creando producto';
-          // Handle both 400 and 500 for duplicate name errors
-          if ((err.status === 400 || err.status === 500) && (errorMsg.toLowerCase().includes('name') || errorMsg.toLowerCase().includes('duplicate') || errorMsg.toLowerCase().includes('existe'))) {
-            this.errors['name'] = 'Ya existe un producto con ese nombre';
-            this.showMessage('Ya existe un producto con ese nombre', 'danger');
-          } else if (err.status === 500) {
-            this.errors['name'] = errorMsg || 'Error interno del servidor';
-            this.showMessage(errorMsg || 'Error interno del servidor', 'danger');
-          } else {
-            this.showMessage(errorMsg, 'danger');
-          }
-          this.cdr.markForCheck();
-        },
-        complete: () => this.cdr.markForCheck()
-      });
-    } else {
-      this.apiService.createProduct(this.formData).subscribe({
-        next: () => {
-          this.showMessage('Producto creado correctamente', 'success');
-          this.loadProducts();
-          this.closeModal();
-        },
         error: (err) => {
           const errorMsg = err.error?.message || err.error?.error || err.message || 'Error creando producto';
-          // Handle both 400 and 500 for duplicate name errors
           if ((err.status === 400 || err.status === 500) && (errorMsg.toLowerCase().includes('name') || errorMsg.toLowerCase().includes('duplicate') || errorMsg.toLowerCase().includes('existe'))) {
             this.errors['name'] = 'Ya existe un producto con ese nombre';
             this.showMessage('Ya existe un producto con ese nombre', 'danger');
